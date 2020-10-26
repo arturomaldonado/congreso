@@ -9,51 +9,60 @@
 
 library(shiny)
 library(ggplot2)
+library(rio)
+congreso <- import("TotalCongreso_11OCT.xlsx")
+votaciones <- import("votaciones.xlsx")
 
 # Definir UI para tabla interactiva de PL
 ui <- fluidPage(
     titlePanel("Proyectos de Ley"),
-    #Una nueva fila en IU para selectInputs
-    fluidRow(
-        column(4,
-               selectInput("leg",
-                           "Legislatura",
-                           c("All",
-                             unique(as.character(congreso$Legislatura))))
-               ),
-        column(4,
-               selectInput("banca",
-                           "Bancada",
-                           c("All",
-                             unique(as.character(congreso$Grupo.Parlamentario))))
-               ),
-        column(4,
-               selectInput("prop",
-                           "Proponente",
-                           c("All",
-                             unique(as.character(congreso$Autor))))
-               )
-    ),
-    #Crear una nueva fila para la tabla#
-    DT::dataTableOutput("tabla")
+    sidebarLayout(
+        sidebarPanel(
+            conditionalPanel(
+                #Input: seleccionar variables
+                'input.dataset === "congreso"',
+                checkboxGroupInput("show_vars", "Columnas para mostrar:",
+                                names(congreso), selected=names(congreso)),
+                
+                #Input: seleccionar bancada
+                selectInput("ban", "Bancada",
+                            choices=c("All",
+                                      unique(as.character(congreso$Grupo.Parlamentario)
+                                             )
+                                      )
+                ),
+            ),
+            conditionalPanel(
+                'input.dataset === "votaciones"',
+                helpText("Mostrar 5 registros por defecto")
+            ),
+            actionButton("update", "Actualizar")
+        ),
+        mainPanel(
+            tabsetPanel(
+                id='dataset',
+                tabPanel("congreso", DT::dataTableOutput("tabla1")),
+                tabPanel("votaciones", DT::dataTableOutput("tabla2"))
+            )
+        )
+    )
 )
 
 # Definir server logic para tabla de PL
 server <- function(input, output) {
-    output$tabla <- DT::renderDataTable(DT::datatable({
-        data<-congreso
-        if(input$leg !="All") {
-            data<-data[data$legislatura==input$leg,]
+    #Escoger columnas y bancadas
+    data<-congreso
+    output$tabla1 <- DT::renderDataTable({
+        if(input$ban !="All"){
+            data<-data[data$Grupo.Parlamentario==input$ban,]
+        DT::datatable(data[, input$show_vars, drop=FALSE])
         }
-        if(input$banca !="All"){
-            data<-data[data$Grupo.Parlamentario==input$banca,]
-        }
-        if(input$prop != "All"){
-            data<-data[data$Autor==input$prop,]
-        }
-        data
-    }))
-    
+    })
+        
+    #5 filas por página
+    output$tabla2 <- renderDataTable({
+        DT::datatable(votaciones, options=list(lengthMenu=c(5,30,50), pageLength=5))
+    })
 }
 
 # Run the application 
